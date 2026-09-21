@@ -1,10 +1,10 @@
 # LAPORAN PRAKTIKUM BAB 1
 ## Fondasi Teoretis dan Kerangka Kerja DevSecOps
 
-**Nama**: Putra Yanuar Rasyid
-**NIM**: 3126640058
-**Kelas**: B
-**Tanggal pelaksanaan**: 21 September 2026
+**Nama**: Putra Yanuar Rasyid  
+**NIM**: 3126640058  
+**Kelas**: B  
+**Tanggal pelaksanaan**: 21 September 2026  
 
 ## 1. Tujuan Praktikum
 

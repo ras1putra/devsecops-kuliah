@@ -191,7 +191,21 @@ Praktikum Bab 1 telah berhasil menyelesaikan sebagian dari proses penetapan base
 
 Hasil praktikum ini menegaskan bahwa laporan harus didasarkan pada bukti nyata dari lingkungan yang digunakan, bukan sekadar menyalin contoh output. Baseline yang valid baru dapat dinyatakan lengkap setelah Docker terpasang, seluruh pemeriksaan diulang, dan aspek keamanan direktori diperkuat. Dengan baseline yang solid, eksperimen pada bab-bab berikutnya akan dapat dilaksanakan secara lebih andal, aman, dan dapat direproduksi.
 
-## 10. Referensi
+## 10. Evaluasi dan Latihan Mandiri
+
+**1. Mengapa DevSecOps tidak dapat direduksi menjadi penambahan scanner pada pipeline?**
+
+Scanner adalah alat, bukan pendekatan. Menambahkan scanner ke pipeline tanpa membangun budaya, ownership, dan proses tindak lanjut hanya menghasilkan daftar temuan yang tidak ditangani. DevSecOps mensyaratkan bahwa setiap temuan memiliki pemilik yang jelas, kriteria penerimaan yang terdefinisi (gate), dan evidence bahwa tindakan koreksi telah dilakukan dan dapat diverifikasi. Tanpa komponen sosial dan tata kelola tersebut, scanner hanya menjadi penghasil noise yang akhirnya diabaikan oleh tim.
+
+**2. Evidence apa yang membedakan klaim kontrol dari kontrol yang benar-benar terverifikasi?**
+
+Klaim kontrol adalah pernyataan bahwa suatu pemeriksaan atau mekanisme sudah berjalan tanpa bukti yang dapat diperiksa ulang. Kontrol yang terverifikasi memiliki: (a) artefak yang dapat dikaitkan ke commit atau waktu tertentu, (b) identitas tool dan versinya, (c) input dan output yang tercatat, dan (d) dapat direproduksi oleh pihak lain secara independen. Pada praktikum ini, output `git --version`, `openssl version`, dan `curl --version` adalah evidence terverifikasi karena menunjukkan versi spesifik pada lingkungan nyata — bukan contoh output yang disalin dari dokumentasi.
+
+**3. Bagaimana shared responsibility memengaruhi ownership risiko dan tindak lanjut temuan?**
+
+Shared responsibility berarti tidak ada satu pihak yang bertanggung jawab atas seluruh aspek keamanan. Developer bertanggung jawab atas kode dan dependensi; operator bertanggung jawab atas konfigurasi runtime dan infra; security bertanggung jawab atas policy dan verifikasi. Masalah muncul ketika batas tanggung jawab tidak jelas — temuan hasil scan dibiarkan karena masing-masing pihak menganggap itu tanggung jawab pihak lain. Solusinya adalah mendefinisikan ownership per kategori temuan sebelum pipeline berjalan, bukan setelah temuan muncul.
+
+## 11. Referensi
 
 1. Ferry Astika Saputra, "Bab 1 — Fondasi Teoretis dan Kerangka Kerja DevSecOps," repository DevSecOps PENS, `bab-01.md`, diakses 21 September 2026: https://github.com/ferryas-pens/devsecops/blob/main/bab-01.md
 2. NIST SP 800-218, *Secure Software Development Framework (SSDF) Version 1.1*.

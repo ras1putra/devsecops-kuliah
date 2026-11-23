@@ -1,0 +1,691 @@
+
+--- PAGE 2 ---
+ 
+Praktikum 6 Centralized Logging dengan Fluent Bit dan PostgreSQL 
+ 
+Praktikum 
+ 
+Membuat folder untuk praktikum 
+ 
+Analisis: Membuat folder utama lab beserta 5 sub-folder (app, policy, reports, sbom, keys) sekaligus 
+dalam satu perintah 
+ 
+Membuat berkas template environment variable 
+ 
+ 
+Analisis: Menyalin .env.example menjadi .env sebagai file konfigurasi aktif yang digunakan Docker 
+Compose untuk membaca variabel basis data. Setelah itu, mengatur izin file ke mode 600 (-rw-------) 
+agar hanya pemilik file yang dapat membaca dan mengubah isinya 
+ 
+Membuat file .gitignore 
+ 
+Analisis: Mengatur .gitignore agar Git mengabaikan file .env yang berisi kredensial, seluruh file log 
+(*.log), dan direktori reports/ 
+ 
+Membuat compose.yaml 
+  1. services: 
+  2.   postgres-db: 
+  3.     image: postgres:16-alpine 
+  4.     environment: 
+  5.       POSTGRES_DB: ${POSTGRES_DB} 
+  6.       POSTGRES_USER: ${POSTGRES_USER} 
+  7.       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} 
+  8.       FLUENTBIT_DB_USER: ${FLUENTBIT_DB_USER} 
+  9.       FLUENTBIT_DB_PASSWORD: ${FLUENTBIT_DB_PASSWORD} 
+ 10.     volumes: 
+ 11.       - pg-data:/var/lib/postgresql/data 
+ 12.       - ./init:/docker-entrypoint-initdb.d:ro 
+ 13.     networks: 
+ 14.       - logging-net 
+
+--- PAGE 3 ---
+ 15.     healthcheck: 
+ 16.       test: 
+ 17.         - CMD-SHELL 
+ 18.         - "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" 
+ 19.       interval: 5s 
+ 20.       timeout: 5s 
+ 21.       retries: 12 
+ 22.       start_period: 10s 
+ 23.     restart: unless-stopped 
+ 24.   
+ 25.   fluent-bit: 
+ 26.     image: fluent/fluent-bit:4.2.8 
+ 27.     environment: 
+ 28.       POSTGRES_DB: ${POSTGRES_DB} 
+ 29.       FLUENTBIT_DB_USER: ${FLUENTBIT_DB_USER} 
+ 30.       FLUENTBIT_DB_PASSWORD: ${FLUENTBIT_DB_PASSWORD} 
+ 31.     volumes: 
+ 32.       - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro 
+ 33.       - flb-storage:/var/log/flb-storage 
+ 34.     ports: 
+ 35.       - "127.0.0.1:24224:24224" 
+ 36.       - "127.0.0.1:2020:2020" 
+ 37.     networks: 
+ 38.       - logging-net 
+ 39.     depends_on: 
+ 40.       postgres-db: 
+ 41.         condition: service_healthy 
+ 42.     security_opt: 
+ 43.       - no-new-privileges:true 
+ 44.     restart: unless-stopped 
+ 45.   
+ 46.   generator-auth: 
+ 47.     image: alpine:3.20 
+ 48.     command: 
+ 49.       - /bin/sh 
+ 50.       - -c 
+ 51.       - | 
+ 52.         i=1 
+ 53.         while [ "$$i" -le 20 ]; do 
+ 54.           printf '{"service":"auth","severity":"INFO","event":"login_test","sequence":%s}\n' "$$i" 
+ 55.           i=$$((i + 1)) 
+ 56.           sleep 1 
+ 57.         done 
+ 58.     logging: 
+ 59.       driver: fluentd 
+ 60.       options: 
+ 61.         fluentd-address: "127.0.0.1:24224" 
+ 62.         fluentd-async: "true" 
+ 63.         tag: "docker.{{.Name}}" 
+ 64.     depends_on: 
+ 65.       - fluent-bit 
+ 66.   
+ 67.   generator-api: 
+ 68.     image: alpine:3.20 
+ 69.     command: 
+ 70.       - /bin/sh 
+ 71.       - -c 
+ 72.       - | 
+ 73.         i=1 
+ 74.         while [ "$$i" -le 20 ]; do 
+ 75.           printf '{"service":"api","severity":"WARN","event":"latency_test","duration_ms":%s}\n' 
+"$$((i * 10))" 
+ 76.           i=$$((i + 1)) 
+ 77.           sleep 1 
+ 78.         done 
+ 79.     logging: 
+ 80.       driver: fluentd 
+ 81.       options: 
+ 82.         fluentd-address: "127.0.0.1:24224" 
+ 83.         fluentd-async: "true" 
+ 84.         tag: "docker.{{.Name}}" 
+ 85.     depends_on: 
+ 86.       - fluent-bit 
+ 87.   
+
+--- PAGE 4 ---
+ 88.   generator-worker: 
+ 89.     image: alpine:3.20 
+ 90.     command: 
+ 91.       - /bin/sh 
+ 92.       - -c 
+ 93.       - | 
+ 94.         i=1 
+ 95.         while [ "$$i" -le 20 ]; do 
+ 96.           printf '{"service":"worker","severity":"ERROR","event":"retry_test","attempt":%s}\n' "$$i" 
+ 97.           i=$$((i + 1)) 
+ 98.           sleep 1 
+ 99.         done 
+100.     logging: 
+101.       driver: fluentd 
+102.       options: 
+103.         fluentd-address: "127.0.0.1:24224" 
+104.         fluentd-async: "true" 
+105.         tag: "docker.{{.Name}}" 
+106.     depends_on: 
+107.       - fluent-bit 
+108.   
+109. volumes: 
+110.   pg-data: 
+111.   flb-storage: 
+112.   
+113. networks: 
+114.   logging-net: 
+115.     driver: bridge 
+116.   
+Analisis: Menyusun konfigurasi Docker Compose untuk menjalankan beberapa container, yaitu 
+database postgres-db dengan healthcheck, collector log fluent-bit, serta tiga generator log (auth, api, 
+dan worker). Ketiga generator mengirimkan log menggunakan driver fluentd secara asynchronous 
+melalui opsi fluentd-async: "true". Seluruh service dihubungkan melalui network internal logging-net,  
+ 
+Menyiapkan skrip inisialisasi basis data init/01-init-logging.sh 
+ 1. #!/usr/bin/env bash 
+ 2. set -Eeuo pipefail 
+ 3.   
+ 4. : "${POSTGRES_USER:?POSTGRES_USER belum diatur}" 
+ 5. : "${POSTGRES_DB:?POSTGRES_DB belum diatur}" 
+ 6. : "${FLUENTBIT_DB_USER:?FLUENTBIT_DB_USER belum diatur}" 
+ 7. : "${FLUENTBIT_DB_PASSWORD:?FLUENTBIT_DB_PASSWORD belum diatur}" 
+ 8.   
+ 9. psql \ 
+10.   --set=ON_ERROR_STOP=1 \ 
+11.   --username "$POSTGRES_USER" \ 
+12.   --dbname "$POSTGRES_DB" \ 
+13.   --set=fb_user="$FLUENTBIT_DB_USER" \ 
+14.   --set=fb_password="$FLUENTBIT_DB_PASSWORD" <<'SQL' 
+15. SELECT format( 
+16.     'CREATE ROLE %I LOGIN PASSWORD %L', 
+17.     :'fb_user', 
+18.     :'fb_password' 
+19. ) 
+20. WHERE NOT EXISTS ( 
+21.     SELECT 1 FROM pg_roles WHERE rolname = :'fb_user' 
+22. ) 
+23. \gexec 
+24.   
+25. CREATE SCHEMA IF NOT EXISTS logs; 
+26.   
+27. CREATE TABLE IF NOT EXISTS logs.fluentbit ( 
+28.     tag  TEXT NOT NULL, 
+29.     time TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
+30.     data JSONB NOT NULL 
+31. ); 
+32.   
+33. CREATE INDEX IF NOT EXISTS idx_fluentbit_time 
+
+--- PAGE 5 ---
+34.     ON logs.fluentbit (time DESC); 
+35.   
+36. CREATE INDEX IF NOT EXISTS idx_fluentbit_tag 
+37.     ON logs.fluentbit (tag); 
+38.   
+39. CREATE INDEX IF NOT EXISTS idx_fluentbit_data_gin 
+40.     ON logs.fluentbit USING GIN (data); 
+41.   
+42. CREATE OR REPLACE VIEW logs.recent_logs AS 
+43. SELECT 
+44.     time, 
+45.     tag, 
+46.     replace(data ->> 'container_name', '/', '') AS container_name, 
+47.     data ->> 'source' AS source, 
+48.     left(data ->> 'log', 200) AS log_preview 
+49. FROM logs.fluentbit 
+50. ORDER BY time DESC 
+51. LIMIT 100; 
+52.   
+53. SELECT format( 
+54.     'ALTER ROLE %I IN DATABASE %I SET search_path TO logs, public', 
+55.     :'fb_user', 
+56.     current_database() 
+57. ) 
+58. \gexec 
+59.   
+60. SELECT format('GRANT USAGE, CREATE ON SCHEMA logs TO %I', :'fb_user') 
+61. \gexec 
+62.   
+63. SELECT format( 
+64.     'GRANT SELECT, INSERT ON TABLE logs.fluentbit TO %I', 
+65.     :'fb_user' 
+66. ) 
+67. \gexec 
+68.   
+69. SELECT format('GRANT SELECT ON TABLE logs.recent_logs TO %I', :'fb_user') 
+70. \gexec 
+71. SQL 
+72.   
+Analisis: Menyiapkan skrip inisialisasi PostgreSQL yang dijalankan saat database pertama kali dibuat 
+pada volume kosong. Skrip membuat akun khusus fluentbit_user, schema logs, tabel fluentbit dengan 
+kolom JSONB, serta indeks untuk pencarian berdasarkan waktu, tag, dan isi data. Selain itu, view 
+recent_logs menampilkan hingga 100 log terbaru beserta ringkasan pesannya. Hak akses collector 
+dibatasi sesuai kebutuhan untuk membaca dan memasukkan log, tanpa menggunakan akun 
+administrator database. 
+ 
+Membuat file konfigurasi fluent-bit/fluent-bit.conf 
+ 1. [SERVICE] 
+ 2.     Flush                     1 
+ 3.     Daemon                    Off 
+ 4.     Log_Level                 info 
+ 5.     storage.path              /var/log/flb-storage 
+ 6.     storage.sync              normal 
+ 7.     storage.checksum          on 
+ 8.     storage.backlog.mem_limit 10M 
+ 9.     HTTP_Server               On 
+10.     HTTP_Listen               0.0.0.0 
+11.     HTTP_Port                 2020 
+12.   
+13. [INPUT] 
+14.     Name          forward 
+15.     Listen        0.0.0.0 
+16.     Port          24224 
+17.     Mem_Buf_Limit 10M 
+18.     storage.type  filesystem 
+19.   
+20. [OUTPUT] 
+
+--- PAGE 6 ---
+21.     Name                     pgsql 
+22.     Match                    * 
+23.     Host                     postgres-db 
+24.     Port                     5432 
+25.     User                     ${FLUENTBIT_DB_USER} 
+26.     Password                 ${FLUENTBIT_DB_PASSWORD} 
+27.     Database                 ${POSTGRES_DB} 
+28.     Table                    fluentbit 
+29.     storage.total_limit_size 256M 
+30.   
+31. [OUTPUT] 
+32.     Name   stdout 
+33.     Match  * 
+34.     Format json_lines 
+35.   
+Analisis: Mengatur Fluent Bit untuk menerima log dari container lain melalui port 24224 dan 
+menyimpannya ke PostgreSQL. Log juga disimpan sementara di filesystem jika pengiriman tertunda. 
+Port 2020 digunakan untuk memantau Fluent Bit, sedangkan output stdout membantu memeriksa log 
+dalam format JSON. 
+ 
+Menyiapkan query untuk analisis queries/analysis.sql 
+ 1. \pset pager off 
+ 2. \timing on 
+ 3.   
+ 4. -- 1. Jumlah event dan rentang waktu. 
+ 5. SELECT 
+ 6.     count(*) AS total_event, 
+ 7.     min(time) AS event_pertama, 
+ 8.     max(time) AS event_terakhir 
+ 9. FROM logs.fluentbit; 
+10.   
+11. -- 2. Distribusi berdasarkan tag Docker. 
+12. SELECT 
+13.     tag, 
+14.     count(*) AS total 
+15. FROM logs.fluentbit 
+16. GROUP BY tag 
+17. ORDER BY total DESC, tag; 
+18.   
+19. -- 3. Metadata terstruktur dari Docker logging driver. 
+20. SELECT 
+21.     time, 
+22.     tag, 
+23.     replace(data ->> 'container_name', '/', '') AS container_name, 
+24.     data ->> 'source' AS source, 
+25.     left(data ->> 'log', 160) AS log_preview 
+26. FROM logs.fluentbit 
+27. ORDER BY time DESC 
+28. LIMIT 15; 
+29.   
+30. -- 4. Pencarian severity pada JSON yang masih berada di field log. 
+31. SELECT 
+32.     time, 
+33.     tag, 
+34.     data ->> 'log' AS log_message 
+35. FROM logs.fluentbit 
+36. WHERE data ->> 'log' ILIKE '%"severity":"ERROR"%' 
+37. ORDER BY time DESC; 
+38.   
+39. -- 5. Ringkasan per menit untuk mengamati laju ingest. 
+40. SELECT 
+41.     date_trunc('minute', time) AS minute_bucket, 
+42.     count(*) AS total 
+43. FROM logs.fluentbit 
+44. GROUP BY minute_bucket 
+45. ORDER BY minute_bucket DESC 
+46. LIMIT 10; 
+47.   
+
+--- PAGE 7 ---
+48. -- Contoh retensi; tinjau dahulu sebelum menghapus data. 
+49. -- DELETE FROM logs.fluentbit 
+50. -- WHERE time < CURRENT_TIMESTAMP - INTERVAL '7 days'; 
+51.   
+Analisis:  
+Menyiapkan query SQL untuk memeriksa log yang tersimpan di PostgreSQL, mulai dari jumlah dan 
+rentang waktu event, distribusi log berdasarkan tag, hingga detail container dan pesan error. Query 
+juga digunakan untuk melihat jumlah log yang masuk setiap menit.  
+ 
+Membuat script generate logs scripts/generate-logs.sh 
+ 1. #!/usr/bin/env bash 
+ 2. set -Eeuo pipefail 
+ 3.   
+ 4. cd "$(dirname "$0")/.." 
+ 5.   
+ 6. if [[ ! -f .env ]]; then 
+ 7.     echo "[FAIL] File .env tidak ditemukan." >&2 
+ 8.     exit 1 
+ 9. fi 
+10.   
+11. docker compose up -d postgres-db fluent-bit 
+12.   
+13. for attempt in {1..30}; do 
+14.     if curl -fsS http://127.0.0.1:2020/api/v1/health >/dev/null; then 
+15.         break 
+16.     fi 
+17.   
+18.     if [[ "$attempt" -eq 30 ]]; then 
+19.         echo "[FAIL] Endpoint kesehatan Fluent Bit belum siap." >&2 
+20.         exit 1 
+21.     fi 
+22.     sleep 2 
+23. done 
+24.   
+25. docker compose up -d --force-recreate \ 
+26.     generator-auth \ 
+27.     generator-api \ 
+28.     generator-worker 
+29.   
+30. echo "[PASS] Tiga generator telah dijalankan. Tunggu sekitar 25 detik." 
+31. echo "[INFO] Pantau dengan: docker compose ps" 
+32.   
+Analisis: Membuat skrip untuk menjalankan postgres-db dan fluent-bit terlebih dahulu, kemudian 
+memeriksa health endpoint Fluent Bit hingga 30 kali dengan jeda dua detik. Setelah endpoint siap, 
+skrip menjalankan ulang ketiga log generator (auth, api, dan worker). Jika file .env tidak ditemukan 
+atau Fluent Bit belum siap setelah seluruh percobaan, proses dihentikan dan pesan error ditampilkan. 
+ 
+Membuat file test buffering untuk menahan event scripts/test-buffering.sh 
+ 1. #!/usr/bin/env bash 
+ 2. set -Eeuo pipefail 
+ 3.   
+ 4. cd "$(dirname "$0")/.." 
+ 5.   
+ 6. if [[ ! -f .env ]]; then 
+ 7.     echo "[FAIL] File .env tidak ditemukan." >&2 
+ 8.     exit 1 
+ 9. fi 
+10.   
+11. set -a 
+12. source .env 
+13. set +a 
+
+--- PAGE 8 ---
+14.   
+15. count_rows() { 
+16.     docker compose exec -T postgres-db \ 
+17.         psql \ 
+18.         --username "$POSTGRES_USER" \ 
+19.         --dbname "$POSTGRES_DB" \ 
+20.         --tuples-only \ 
+21.         --no-align \ 
+22.         --command 'SELECT count(*) FROM logs.fluentbit;' 
+23. } 
+24.   
+25. before="$(count_rows)" 
+26. echo "[INFO] Jumlah awal: $before" 
+27.   
+28. docker compose stop postgres-db 
+29.   
+30. docker compose up -d --force-recreate \ 
+31.     generator-auth \ 
+32.     generator-api \ 
+33.     generator-worker 
+34.   
+35. echo "[INFO] PostgreSQL berhenti; generator berjalan selama 25 detik." 
+36. sleep 25 
+37.   
+38. docker compose start postgres-db 
+39.   
+40. for attempt in {1..30}; do 
+41.     if docker compose exec -T postgres-db \ 
+42.         pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then 
+43.         break 
+44.     fi 
+45.   
+46.     if [[ "$attempt" -eq 30 ]]; then 
+47.         echo "[FAIL] PostgreSQL tidak kembali sehat." >&2 
+48.         exit 1 
+49.     fi 
+50.     sleep 2 
+51. done 
+52.   
+53. for attempt in {1..60}; do 
+54.     after="$(count_rows)" 
+55.     if (( after > before )); then 
+56.         echo "[PASS] Jumlah sesudah pemulihan: $after" 
+57.         echo "[INFO] Kenaikan record: $((after - before))" 
+58.         exit 0 
+59.     fi 
+60.     sleep 2 
+61. done 
+62.   
+63. echo "[FAIL] Tidak ada record baru setelah PostgreSQL pulih." >&2 
+64. echo "[INFO] Periksa: docker compose logs --tail 200 fluent-bit" >&2 
+65. exit 1 
+66.   
+Analisis: Membuat skrip untuk menguji buffering Fluent Bit dengan menghentikan PostgreSQL 
+sementara selama 25 detik saat log generator tetap berjalan. Setelah PostgreSQL dijalankan kembali, 
+skrip memeriksa kesiapan database dan memantau jumlah record hingga 120 detik. Pengujian 
+dinyatakan berhasil jika jumlah record bertambah setelah database pulih 
+ 
+Memberi izin eksekusi dan memvalidasi file 
+ 
+
+--- PAGE 9 ---
+Analisis: Memberikan izin eksekusi pada ketiga skrip, lalu menggunakan bash -n untuk memeriksa 
+sintaks setiap skrip tanpa menjalankannya. Terakhir, docker compose config --quiet memvalidasi 
+konfigurasi Docker Compose tanpa menampilkan output jika tidak ada error 
+Memvalidasi konfigurasi Fluent Bit tanpa menjalankan seluruh stack compose.yaml 
+ 
+Analisis: Memvalidasi konfigurasi Fluent Bit menggunakan opsi --dry-run tanpa menjalankan seluruh 
+stack. Opsi --no-deps mencegah Docker Compose menjalankan service dependency, sedangkan --rm 
+menghapus container sementara setelah proses selesai. Output menunjukkan tes konfigurasi sukses 
+ 
+Alternatif jika image tidak mengenali --dry-run 
+ 
+Analisis: Jika image Fluent Bit tidak mendukung opsi --dry-run, validasi dilakukan dengan 
+menjalankan service postgres-db dan fluent-bit, kemudian memeriksa 100 baris log terakhir. Log 
+
+--- PAGE 10 ---
+startup digunakan untuk memastikan konfigurasi berhasil dimuat dan mendeteksi error pada input, 
+output, atau koneksi ke PostgreSQL 
+ 
+Menjalankan pipelane dan menghasilkan log 
+ 
+Analisis: Ketiga log generator (auth, api, dan worker) berhasil dijalankan dan selesai dengan status 
+Exited (0), yang menandakan proses berakhir tanpa error. Sementara itu, PostgreSQL berstatus Up ... 
+(healthy) dan Fluent Bit berstatus Up, sehingga keduanya tetap berjalan setelah generator selesai. 
+Output ini menunjukkan pipeline berhasil dijalankan, tetapi keberhasilan penyimpanan log ke 
+PostgreSQL masih perlu diverifikasi melalui query SQL 
+ 
+Memeriksa Monitoring Fluent Bit 
+ 
+Analisis: Endpoint health Fluent Bit merespons dengan baik, sedangkan metrics menunjukkan 60 log 
+record telah diterima dan diproses oleh input serta diteruskan ke PostgreSQL dan stdout. Nilai errors, 
+retries, dan dropped_records sebesar 0. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 11 ---
+Memverifikasi Record PostgreSQL 
+ 
+Analsis: Mengekspor variabel dari .env ke shell aktif agar kredensial dapat digunakan oleh perintah 
+SQL tanpa perlu membuka port PostgreSQL ke publik. Hasil query menunjukkan 60 event log berhasil 
+tersimpan, masing-masing 20 event dari generator-api, generator-auth, dan generator-worker dalam 
+rentang 22 detik. Metadata container (container_name dan source) serta payload JSON yang berisi 
+service, severity, dan detail event aplikasi juga tersimpan dalam kolom JSONB. 
+ 
+Pemeriksaan ringkas terhadap view 
+ 
+
+--- PAGE 12 ---
+Analisis: Perintah TABLE logs.recent_logs; digunakan sebagai cara singkat untuk menampilkan 
+seluruh kolom dari view logs.recent_logs. Hasilnya menampilkan log terbaru dalam bentuk tabel, 
+termasuk timestamp, tag container, sumber log (stdout), dan cuplikan pesan beserta tingkat severity 
+seperti ERROR, WARN, dan INFO. Data diurutkan dari waktu terbaru ke terlama (time DESC) 
+ 
+Menguji Buffering dan Pemulihan 
+ 
+Analisis: Pengujian failover diawali dengan mencatat jumlah awal log di basis data sebanyak 60 entri, 
+kemudian container bab-6-postgres-db-1 dihentikan paksa (Stopped). Selama database mati, ketiga 
+generator (api, auth, worker) dijalankan untuk beroperasi dan mengirimkan log selama 25 detik. Fluent 
+Bit terbukti berhasil menahan seluruh lonjakan event baru ke dalam antrean filesystem buffer (flb-
+storage) tanpa mengalami crash. Begitu container database dinyalakan kembali hingga berstatus 
+Healthy, Fluent Bit langsung menguras antrean backlog ke PostgreSQL, menghasilkan status [PASS] 
+dengan penambahan tepat 60 record baru (total menjadi 120) yang membuktikan integritas data tetap 
+terjaga tanpa ada log yang hilang selama database offline, seperti di screenshoot di bawah ini: 
+ 
+Menggunakan dua Docker volume, yaitu bab-6_pg-data untuk menyimpan data PostgreSQL dan bab-
+6_flb-storage untuk menyimpan antrean filesystem buffer Fluent Bit. Volume bab-6_flb-storage 
+menjaga data buffer tetap tersimpan di disk ketika PostgreSQL mati atau container Fluent Bit 
+mengalami restart, sehingga log yang belum terkirim dapat diproses kembali setelah service pulih 
+
+--- PAGE 13 ---
+ 
+ 
+Memverifikasi tipe data 
+ 
+Analisis : Hasil query menunjukkan bahwa kolom data bertipe jsonb dengan total 120 record tersimpan 
+di PostgreSQL. Hasil ini membuktikan bahwa struktur data log sesuai konfigurasi dan record berhasil 
+tersimpan 
+ 
+Cleanup 
+ 
+Analisis: Perintah docker compose down --remove-orphans menghentikan dan menghapus container 
+serta network yang dibuat oleh Compose tanpa menghapus volume, sehingga data log tetap tersimpan. 
+Sementara itu, opsi --volumes turut menghapus volume database dan backlog Fluent Bit, sehingga 
+seluruh data praktikum yang tersimpan di dalamnya akan hilang.  
+ 
+Latihan Mandiri 
+1. Tambahkan field request_id pada generator dan susun query untuk menelusuri satu transaksi 
+lintas service. 
+Menambahkan field request_id pada generator di compose.yaml 
+
+--- PAGE 14 ---
+ 
+ 
+ 
+Analisis: Konfigurasi printf pada ketiga container diubah dengan menyisipkan pasangan key-
+value "request_id":"req-%s" 
+ 
+Membuat ulang container 
+ 
+Analisis: Perintah --force-recreate menghancurkan dan membuat ulang ketiga container 
+generator menggunakan konfigurasi baru 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 15 ---
+Menjalankan query penelusuran transaksi lintas service 
+ 
+Analisis: Hasil query membuktikan bahwa satu siklus transaksi dengan identifier req-5 berhasil 
+tercatat dan ditelusuri secara berurutan pada 3 container berbeda 
+2. Modifikasi pipeline agar isi JSON pada data.log diparse menjadi field terstruktur. Tulis 
+pengujian negatif untuk log yang bukan JSON valid. 
+Menambahkan filter di config fluent bit 
+ 
+Analisis: Konfigurasi Key_Name log digunakan untuk mengambil isi dari field log sebagai 
+data yang akan diproses, sedangkan Parser json menentukan parser JSON bawaan Fluent Bit 
+untuk membaca log berformat JSON. Opsi Reserve_Data On berperan penting dalam pengujian 
+negatif karena mempertahankan data asli ketika isi log bukan JSON yang valid, sehingga data 
+tersebut tidak langsung dibuang (drop) dan tetap dapat diperiksa lebih lanjut 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 16 ---
+Pengujian Positif (JSON Valid) dan Pengujian Negatif (Non-JSON) 
+ 
+Analisis: Pada pengujian positif (docker.test-positive), pipeline berhasil mengekstrak 
+nilai payment ke parsed_service dan 50000 ke parsed_amount. Pada pengujian negatif 
+(docker.test-negative), sistem terbukti fault-tolerant; pesan galat teks biasa tetap tersimpan di 
+database pada field raw_log tanpa menyebabkan kegagalan ingest pada Fluent Bit 
+3. Sisipkan nilai canary yang menyerupai token sintetis, lalu rancang filter redaction dan buktikan 
+nilai tersebut tidak mencapai PostgreSQL. 
+Memodifikasi fluent-bit.conf untuk Parsing dan Redaction Token 
+ 
+Analisis: Pada konfigurasi fluent-bit.conf, direktif Parsers_File /fluent-bit/etc/parsers.conf 
+ditambahkan ke dalam blok [SERVICE] untuk memuat parser bawaan Fluent Bit. Hal ini 
+diperlukan karena definisi parser tidak dapat ditulis langsung di berkas konfigurasi utama. 
+Selanjutnya, filter parser dengan pengaturan Parser json dan Reserve_Data On digunakan untuk 
+
+--- PAGE 17 ---
+mengubah string JSON pada field log menjadi atribut yang dapat diproses secara terpisah. 
+Pengaturan ini juga memastikan pesan teks yang bukan JSON tetap dipertahankan ketika 
+proses parsing gagal. Setelah itu, filter modify dengan kondisi Key_Exists token memeriksa 
+keberadaan atribut token dan mengganti nilainya menjadi [REDACTED] jika ditemukan. 
+Proses penyamaran ini dilakukan sebelum log dikirim ke output PostgreSQL, sehingga nilai 
+kredensial sensitif tidak diteruskan dalam bentuk aslinya 
+ 
+Menguji injeksi canary token dan memverifikasi redaction di database 
+ 
+Analisis: Pengujian dilakukan dengan menjalankan container sementara yang mengirimkan log 
+berformat JSON berisi token rahasia sintetis CANARY-SECRET-KEY-99999 menggunakan 
+Docker logging driver fluentd. Berdasarkan hasil query di PostgreSQL, field service berhasil 
+diparse menjadi auth, sedangkan nilai token berhasil disamarkan menjadi [REDACTED] pada 
+kolom masked_token. Selain itu, hasil evaluasi ekspresi leaked_to_db menunjukkan nilai false 
+(f), yang berarti token rahasia tersebut tidak ditemukan tersimpan di database 
+4. Bandingkan jumlah event yang dihasilkan, diterima input Fluent Bit, dan tersimpan di 
+PostgreSQL. Jelaskan setiap selisih berdasarkan evidence. 
+ 
+Analisis: Berdasarkan hasil pemeriksaan, database PostgreSQL menyimpan total 65 record, 
+yang terdiri dari 60 log generator utama dan 5 log pengujian manual. Sementara itu, metrik 
+Fluent Bit menunjukkan nilai records: 1 pada input forward, output pgsql, dan output stdout. 
+Hal ini menunjukkan bahwa satu record yang tercatat pada input diteruskan ke kedua output 
+
+--- PAGE 18 ---
+tersebut.Perbedaan jumlah record antara PostgreSQL dan metrik Fluent Bit terjadi karena 
+keduanya mencatat informasi yang berbeda. PostgreSQL menyimpan log secara persisten 
+menggunakan Docker named volume, sedangkan metrik Fluent Bit mencatat aktivitas 
+pemrosesan sejak collector berjalan. Jika container direstart, nilai metrik dapat kembali ke 
+awal. Oleh karena itu, angka 1 tidak dapat langsung dibandingkan dengan total 65 baris di 
+database, dikarenakan direstart pada latihan mandiri di atas 
+5. Rancang kebijakan retensi tujuh hari yang dapat dijalankan terjadwal tanpa mengunci tabel 
+secara berlebihan. 
+Membuat script scripts/purge-retention.sh 
+ 1. #!/usr/bin/env bash 
+ 2. set -euo pipefail 
+ 3.   
+ 4. DAYS="${1:-7}" 
+ 5. BATCH_SIZE="${2:-5000}" 
+ 6.   
+ 7. while true; do 
+ 8.   DELETED=$(docker compose exec -T postgres-db psql -U labadmin -d labdb -t -A -c " 
+ 9.     WITH to_delete AS ( 
+10.       SELECT ctid FROM logs.fluentbit 
+11.       WHERE time < NOW() - INTERVAL '$DAYS days' 
+12.       LIMIT $BATCH_SIZE 
+13.     ) 
+14.     DELETE FROM logs.fluentbit 
+15.     WHERE ctid IN (SELECT ctid FROM to_delete); 
+16.   ") 
+17.   COUNT=$(echo "$DELETED" | awk '{print $2}') 
+18.   if [ -z "$COUNT" ] || [ "$COUNT" -eq 0 ]; then 
+19.     break 
+20.   fi 
+21.   sleep 0.1 
+22. done 
+23.   
+Analisis: Script scripts/purge-retention.sh dibuat untuk menghapus log yang berumur lebih dari 
+tujuh hari secara bertahap (batch deletion). Proses penghapusan menggunakan Common Table 
+Expression (CTE) dengan ctid sebagai penunjuk baris fisik dan LIMIT 5000 untuk membatasi 
+jumlah record yang dihapus dalam setiap batch. Dengan cara ini, penghapusan tidak dilakukan 
+sekaligus dalam jumlah besar sehingga beban database dapat lebih terkendali. Strategi ini juga 
+membantu mengurangi potensi gangguan terhadap proses penulisan log baru dari Fluent Bit. 
+Namun, penghapusan bertahap tidak sepenuhnya menghilangkan risiko lock contention 
+maupun lonjakan Write-Ahead Logging (WAL) 
+ 
+Memberikan izin eksekusi dan menjadwalkan otomasi via crontab 
+ 
+Analisis: Perintah chmod +x digunakan untuk memberikan izin eksekusi pada script agar dapat 
+dijalankan langsung oleh sistem operasi. Selanjutnya, script didaftarkan melalui crontab agar 
+proses pembersihan log berjalan secara otomatis tanpa perlu dijalankan secara manual oleh 
+administrator. Jadwal menggunakan ekspresi 0 2 * * *, yang berarti script dijalankan setiap hari 
+pada pukul 02.00. Seluruh keluaran proses diarahkan ke berkas retention.log agar aktivitas 
+pembersihan dapat diperiksa kembali sebagai bagian dari audit operasional 
+ 
+
+--- PAGE 19 ---
+Pengujian 
+ 
+Analisis: Pengujian berhasil dimana data dummy kadaluarsa terhapus 
+6. Jelaskan mengapa PostgreSQL sesuai untuk laboratorium ini, tetapi belum tentu tepat untuk 
+telemetry berukuran sangat besar. 
+PostgreSQL cocok untuk lab karena mudah dijalankan melalui Docker, mendukung JSONB, 
+dan menggunakan SQL standar. Namun, untuk telemetri skala besar, penyimpanan row-
+oriented dapat meningkatkan beban I/O saat menganalisis log dalam jumlah besar, sedangkan 
+table bloat dapat membuat penggunaan ruang disk meningkat akibat penghapusan data yang 
+berulang 
+ 
+ 

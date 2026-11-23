@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+.DS_Store
+.env*
+!.env.example
+next-env.d.ts
+.playwright-mcp/
+pagination-*.png

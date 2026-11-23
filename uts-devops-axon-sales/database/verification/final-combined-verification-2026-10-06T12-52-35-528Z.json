@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-10-06T12:52:35.528Z",
+  "checkout": {
+    "path": "/Users/andirayka/Downloads/Tugas/DevOps/UTS - Axon Sales/uts-devops",
+    "branch": "main",
+    "pageSha256": "094987b1570aedc35e673d608f6e01f1a152f96083e1af2247bc9d5aab2c7df9",
+    "pageSha256MatchedCheckSnapshot": true
+  },
+  "checks": {
+    "gitDiffCheck": {
+      "exitCode": 0,
+      "output": ""
+    },
+    "npmTest": {
+      "exitCode": 0,
+      "testFilesPassed": 5,
+      "testsPassed": 38
+    },
+    "npmLint": {
+      "exitCode": 0
+    },
+    "npmTypecheck": {
+      "exitCode": 0
+    },
+    "npmBuild": {
+      "exitCode": 0,
+      "nextVersion": "16.3.8",
+      "bundler": "Turbopack",
+      "routes": [
+        "/",
+        "/_not-found",
+        "/api/health",
+        "/api/sales"
+      ],
+      "isolatedSnapshot": ".amp/in/axon-final-build-20261006T1250Z",
+      "isolatedSnapshotRemovedAfterBuild": true,
+      "pageSha256InSnapshot": "094987b1570aedc35e673d608f6e01f1a152f96083e1af2247bc9d5aab2c7df9"
+    }
+  },
+  "api": {
+    "/api/health": {
+      "httpStatus": 200,
+      "ready": true,
+      "source": "mysql",
+      "database": "connected"
+    },
+    "/api/sales": {
+      "httpStatus": 200,
+      "source": "mysql",
+      "salesCount": 326,
+      "statusCounts": {
+        "cancelled": 6,
+        "completed": 307,
+        "processing": 13
+      }
+    }
+  },
+  "secretsRecorded": false
+}

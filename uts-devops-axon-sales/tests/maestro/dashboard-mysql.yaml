@@ -1,0 +1,136 @@
+appId: ${APP_URL}
+name: MySQL dashboard data and filters
+---
+- launchApp:
+    appId: ${APP_URL}
+- extendedWaitUntil:
+    visible: "MySQL · Data dosen"
+    timeout: 30000
+- evalScript: |
+    window.__mysqlDashboard = (() => {
+      const rows = Array.from(document.querySelectorAll("tbody tr"));
+      const dates = Array.from(document.querySelectorAll("tbody time[datetime]"), (time) => time.getAttribute("datetime"));
+      const values = rows.map((row) => row.cells[6].textContent.trim());
+      const amounts = values.map((value) => Number(value.replaceAll(".", "").replace(",", ".")));
+      const active = rows.filter((row) => row.cells[5].textContent.trim() !== "Dibatalkan");
+      const activeAmounts = active.map((row) => Number(row.cells[6].textContent.trim().replaceAll(".", "").replace(",", ".")));
+      const completed = active.filter((row) => row.cells[5].textContent.trim() === "Selesai").length;
+      const metrics = document.querySelector('[aria-label="Metrik penjualan"]');
+      const format = (value) => new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+      return {
+        count: rows.length,
+        yearRange: dates[0]?.startsWith("2005") && dates[dates.length - 1]?.startsWith("2003"),
+        newestFirst: dates.every((date, index) => index === 0 || dates[index - 1] >= date),
+        countryHeader: document.querySelector("th:nth-child(5)")?.textContent.trim() === "Negara pelanggan",
+        tableFits: (() => {
+          const table = document.querySelector("#transaksi table");
+          return table.scrollWidth <= table.parentElement.clientWidth;
+        })(),
+        countryAndAmountVisible: (() => {
+          const table = document.querySelector("#transaksi table");
+          const viewport = table.parentElement.getBoundingClientRect();
+          const country = table.querySelector("th:nth-child(5)").getBoundingClientRect();
+          const amount = table.querySelector("th:nth-child(7)").getBoundingClientRect();
+          return country.left >= viewport.left && amount.right <= viewport.right;
+        })(),
+        fullProductSummary: (() => {
+          const product = rows[0]?.cells[3].querySelector("[title]");
+          return product?.getAttribute("title") === product?.textContent.trim();
+        })(),
+        chartLabelCount: Array.from(document.querySelectorAll("#grafik .mt-2 span"), (label) => label.textContent.trim()).filter(Boolean).length,
+        lastChartLabelVisible: (() => {
+          const labels = Array.from(document.querySelectorAll("#grafik .mt-2 span")).filter((label) => label.textContent.trim());
+          const label = labels.at(-1);
+          const range = document.createRange();
+          range.selectNodeContents(label);
+          const textBounds = range.getBoundingClientRect();
+          const track = label.parentElement.getBoundingClientRect();
+          return label.textContent.trim() === "31 Mei" && textBounds.width > 0 && textBounds.left >= track.left && textBounds.right <= track.right;
+        })(),
+        chartFits: (() => {
+          const chart = document.querySelector("#grafik .mt-6");
+          return chart.scrollWidth <= chart.clientWidth;
+        })(),
+        visibleChartBars: (() => {
+          const plot = document.querySelector("#grafik .relative.h-48");
+          const bounds = plot.getBoundingClientRect();
+          return Array.from(plot.querySelectorAll(".group > div")).filter((bar) => {
+            const rect = bar.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && rect.left < bounds.right && rect.right > bounds.left;
+          }).length;
+        })(),
+        neutralChart: document.querySelector("#grafik")?.textContent.includes("Nilai dataset · desimal") && !document.querySelector("#grafik")?.textContent.includes("jt"),
+        defaultsUnfiltered: document.querySelector("input[type=search]").value === "" && document.querySelector("select").value === "all" && Array.from(document.querySelectorAll("input[type=date]")).every((input) => input.value === ""),
+        decimalValues: values.every((value) => !value.includes("Rp") && !value.includes("USD") && /,\d{2}$/.test(value)),
+        total: amounts.reduce((sum, amount) => sum + amount, 0).toFixed(2),
+        revenueKpi: metrics.querySelector("article:first-child p:nth-of-type(2)").textContent.trim() === format(activeAmounts.reduce((sum, amount) => sum + amount, 0)),
+        transactionKpi: metrics.querySelector("article:nth-child(2) p:nth-of-type(2)").textContent.trim() === "326",
+        averageKpi: metrics.querySelector("article:nth-child(3) p:nth-of-type(2)").textContent.trim() === format(activeAmounts.reduce((sum, amount) => sum + amount, 0) / active.length),
+        completionKpi: metrics.querySelector("article:nth-child(4) > p").textContent.trim() === `${completed} selesai dari ${active.length} pesanan aktif`,
+      };
+    })();
+- assertTrue:
+    condition: document.location.pathname === "/"
+- assertTrue:
+    condition: window.__mysqlDashboard.count === 326
+- assertTrue:
+    condition: window.__mysqlDashboard.yearRange && window.__mysqlDashboard.newestFirst
+- assertTrue:
+    condition: window.__mysqlDashboard.countryHeader && window.__mysqlDashboard.neutralChart
+- assertTrue:
+    condition: window.__mysqlDashboard.tableFits && window.__mysqlDashboard.countryAndAmountVisible && window.__mysqlDashboard.chartLabelCount <= 9
+- assertTrue:
+    condition: window.__mysqlDashboard.fullProductSummary
+- assertTrue:
+    condition: window.__mysqlDashboard.chartFits && window.__mysqlDashboard.visibleChartBars > 0
+- assertTrue:
+    condition: window.__mysqlDashboard.lastChartLabelVisible
+- assertTrue:
+    condition: window.__mysqlDashboard.defaultsUnfiltered
+- assertTrue:
+    condition: window.__mysqlDashboard.decimalValues && window.__mysqlDashboard.total === "9604190.61"
+- assertTrue:
+    condition: window.__mysqlDashboard.revenueKpi && window.__mysqlDashboard.transactionKpi && window.__mysqlDashboard.averageKpi && window.__mysqlDashboard.completionKpi
+- evalScript: |
+    const search = document.querySelector('input[type="search"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    const orderId = document.querySelector("tbody tr:first-child td:first-child").textContent.trim();
+    setter.call(search, orderId);
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    search.dispatchEvent(new Event("change", { bubbles: true }));
+- extendedWaitUntil:
+    visible: "1 transaksi sesuai filter"
+    timeout: 10000
+- assertTrue:
+    condition: document.querySelectorAll("tbody tr").length === 1 && document.querySelector("tbody tr:first-child td:first-child")?.textContent.trim() === document.querySelector("input[type=search]")?.value
+- evalScript: |
+    const search = document.querySelector('input[type="search"]');
+    const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    inputSetter.call(search, "");
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    search.dispatchEvent(new Event("change", { bubbles: true }));
+    const status = document.querySelector("select");
+    const statusSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
+    statusSetter.call(status, "completed");
+    status.dispatchEvent(new Event("change", { bubbles: true }));
+- assertTrue:
+    condition: document.querySelectorAll("tbody tr").length > 0 && Array.from(document.querySelectorAll("tbody tr")).every((row) => row.cells[5]?.textContent?.trim() === "Selesai")
+- evalScript: |
+    const completed = Array.from(document.querySelectorAll("tbody tr")).find((row) => row.cells[5].textContent.trim() === "Selesai");
+    const date = completed.querySelector("time[datetime]").getAttribute("datetime");
+    const [from, to] = document.querySelectorAll('input[type="date"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    setter.call(from, date);
+    from.dispatchEvent(new Event("input", { bubbles: true }));
+    from.dispatchEvent(new Event("change", { bubbles: true }));
+    setter.call(to, date);
+    to.dispatchEvent(new Event("input", { bubbles: true }));
+    to.dispatchEvent(new Event("change", { bubbles: true }));
+- assertTrue:
+    condition: document.querySelectorAll("tbody tr").length > 0 && Array.from(document.querySelectorAll("tbody tr")).every((row) => row.querySelector("time[datetime]")?.getAttribute("datetime") === document.querySelector('input[type="date"]')?.value && row.cells[5]?.textContent?.trim() === "Selesai")
+- tapOn: "Reset"
+- extendedWaitUntil:
+    visible: "326 transaksi sesuai filter"
+    timeout: 10000
+- assertTrue:
+    condition: document.location.pathname === "/" && document.querySelectorAll("tbody tr").length === 326 && document.querySelector("input[type=search]")?.value === "" && document.querySelector("select")?.value === "all" && Array.from(document.querySelectorAll("input[type=date]")).every((input) => input.value === "")

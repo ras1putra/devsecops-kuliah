@@ -1,0 +1,121 @@
+{
+  "checkedAt": "2026-10-06T12:14:19.812Z",
+  "database": {
+    "version": "8.4.11",
+    "name": "classicmodels",
+    "tableRows": {
+      "customers": 122,
+      "employees": 23,
+      "offices": 7,
+      "orderdetails": 2996,
+      "orders": 326,
+      "payments": 273,
+      "productlines": 7,
+      "products": 110
+    },
+    "orderStatuses": {
+      "Cancelled": 6,
+      "Disputed": 3,
+      "In Process": 6,
+      "On Hold": 4,
+      "Resolved": 4,
+      "Shipped": 303
+    },
+    "paymentTotal": "8853839.23",
+    "proceduresBefore": [
+      "Customer_Details",
+      "Product_Details"
+    ],
+    "proceduresAfter": [
+      "Customer_Details",
+      "Product_Details"
+    ],
+    "orderItemGrossTotal": "9604190.61",
+    "apiStatusMapping": {
+      "completed": "Shipped + Resolved",
+      "processing": "In Process + On Hold + Disputed",
+      "cancelled": "Cancelled"
+    }
+  },
+  "sourceIntegrity": {
+    "databaseDumpSha256": "94cdaf7167f74f3c08d30d78774ad5345e15c009e23abfc0f1125f278533a10c",
+    "analysisSourceSha256": "6b5278bac9f37db273c85d8cf9f2adb24a7058320ac1587537c4e9d1059f50c7",
+    "databaseDumpMatchesRetrieval": true,
+    "analysisSourceMatchesRetrieval": true
+  },
+  "correctedSql": {
+    "sha256": "aa5f2eb7093a0a8694ab4533b9cbe1dd225903632d332401ad732b95f4ece398",
+    "onlyExpectedCaseWhitespaceAndEofChanges": true,
+    "diffSummary": [
+      "Orderdetails -> orderdetails in DESCRIBE and SELECT identifiers (case only)",
+      "productLines -> productlines in one SELECT table identifier (case only)",
+      "one comment indentation change and final newline"
+    ],
+    "exitCode": 0,
+    "spawnError": null,
+    "errorLines": [],
+    "stderr": "",
+    "stdoutBytes": 207765
+  },
+  "api": {
+    "/api/health": {
+      "status": 200,
+      "ready": true,
+      "source": "mysql",
+      "database": "connected"
+    },
+    "/api/sales": {
+      "status": 200,
+      "source": "mysql",
+      "salesCount": 326,
+      "statusCounts": {
+        "cancelled": 6,
+        "completed": 307,
+        "processing": 13
+      },
+      "saleKeys": [
+        "amount",
+        "channel",
+        "customer",
+        "date",
+        "id",
+        "product",
+        "status"
+      ],
+      "maxStringFieldLength": 498
+    }
+  },
+  "checks": {
+    "npm test": {
+      "exitCode": 0,
+      "testFilesPassed": 5,
+      "testsPassed": 38
+    },
+    "npm run lint": {
+      "exitCode": 0
+    },
+    "npm run typecheck": {
+      "exitCode": 0
+    },
+    "npm run build": {
+      "exitCode": 0,
+      "nextVersion": "16.3.8",
+      "bundler": "Turbopack",
+      "isolatedSnapshot": ".amp/in/axon-backend-build-20261006T1214",
+      "outputDirectory": ".amp/in/axon-backend-build-20261006T1214/.next",
+      "routes": [
+        "/",
+        "/_not-found",
+        "/api/health",
+        "/api/sales"
+      ],
+      "originalDevServerDistTouched": false,
+      "scratchSnapshotRemovedAfterBuild": true
+    },
+    "post-build live server": {
+      "port": 3001,
+      "healthHttpStatus": 200,
+      "salesHttpStatus": 200
+    }
+  }
+}

@@ -1,0 +1,4 @@
+# Preserve source SQL and captured SQL transcripts byte-for-byte for provenance.
+database/source/*.sql -text -whitespace
+database/verification/*.sql -text -whitespace
+database/verification/*.log -text -whitespace

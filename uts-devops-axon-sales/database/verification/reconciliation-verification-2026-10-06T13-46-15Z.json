@@ -1,0 +1,112 @@
+{
+  "timestamp": "2026-10-06T13:46:15Z",
+  "branch": "main",
+  "baseCommit": "10aa329",
+  "upstreamSync": {
+    "method": "git merge --ff-only origin/main",
+    "fastForward": true,
+    "commitsApplied": 7,
+    "localCommitsAheadBeforeSync": 0
+  },
+  "checks": {
+    "npmCi": {
+      "exitCode": 0,
+      "packagesAdded": 429
+    },
+    "npmTest": {
+      "exitCode": 0,
+      "testFilesPassed": 5,
+      "testsPassed": 38
+    },
+    "npmLint": {
+      "exitCode": 0
+    },
+    "npmTypecheck": {
+      "exitCode": 0
+    },
+    "npmBuild": {
+      "exitCode": 0,
+      "nextVersion": "16.3.8",
+      "bundler": "Turbopack",
+      "isolatedOutput": ".amp/in/axon-delivery-standalone-20261006T134400Z/.next",
+      "snapshotRemovedAfterCheck": true,
+      "checkoutNextOutputTouched": false,
+      "standaloneServerStartedAndTested": true,
+      "routes": [
+        "/",
+        "/_not-found",
+        "/api/health",
+        "/api/metrics",
+        "/api/sales"
+      ],
+      "warning": "Next inferred the workspace root from the checkout package-lock because the isolated snapshot and checkout both contained lockfiles. The snapshot produced a standalone server under .next/standalone/.amp/in/axon-delivery-standalone-20261006T134400Z/server.js; that server was started directly for API checks, and the checkout .next mtime remained unchanged."
+    },
+    "composeConfig": {
+      "development": {
+        "valid": true,
+        "appDataSource": "mysql",
+        "databaseHost": "mysql",
+        "database": "classicmodels"
+      },
+      "production": {
+        "valid": true,
+        "appDataSource": "mysql",
+        "databaseHost": "mysql",
+        "database": "classicmodels"
+      }
+    },
+    "gitDiffCheck": {
+      "exitCode": 0,
+      "stagedAndUnstaged": true,
+      "sourceArtifactBytesPreservedByGitAttributes": true
+    },
+    "secretReview": {
+      "candidateFilesScanned": true,
+      "matches": 10,
+      "reviewedPlaceholdersInterpolationsAndTestFixtures": 10,
+      "unclassifiedMatches": 0,
+      "credentialsRecorded": false
+    }
+  },
+  "api": {
+    "testPort": 3137,
+    "servedBy": "isolated Next.js standalone server",
+    "/api/health": {
+      "httpStatus": 200,
+      "ready": true,
+      "source": "mysql",
+      "database": "connected"
+    },
+    "/api/sales": {
+      "httpStatus": 200,
+      "source": "mysql",
+      "salesCount": 326,
+      "statusCounts": {
+        "cancelled": 6,
+        "completed": 307,
+        "processing": 13
+      },
+      "amountSum": "9604190.61"
+    }
+  },
+  "database": {
+    "version": "8.4.11",
+    "name": "classicmodels",
+    "tableCount": 8,
+    "sourceDumpSha256": "94cdaf7167f74f3c08d30d78774ad5345e15c009e23abfc0f1125f278533a10c",
+    "sourceDumpMatchesUpstreamInitSql": true,
+    "sourceBytesPreservedInGitIndex": true,
+    "analysisSqlSha256": "6b5278bac9f37db273c85d8cf9f2adb24a7058320ac1587537c4e9d1059f50c7",
+    "correctedAnalysisSqlSha256": "aa5f2eb7093a0a8694ab4533b9cbe1dd225903632d332401ad732b95f4ece398",
+    "correctedAnalysisSqlExecutedWithoutErrors": true,
+    "localSetupRefusesExistingObjects": {
+      "existingTablesOrViews": 8,
+      "expectedExitCode": 1,
+      "importExecuted": false
+    }
+  },
+  "ui": {
+    "pageSha256": "094987b1570aedc35e673d608f6e01f1a152f96083e1af2247bc9d5aab2c7df9",
+    "matchesPreviouslyScreenshotInspectedRevision": true
+  }
+}

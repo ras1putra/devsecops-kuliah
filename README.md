@@ -11,6 +11,7 @@
 
 - **Aplikasi Axon Sales:** https://axon-kelompok-1.my.id/
 - **Monitoring Grafana:** https://axon-kelompok-1.my.id/grafana
+- Username: admin Password: admin
 - **Source Code Proyek:** [`uts-devops-axon-sales/`](./uts-devops-axon-sales/)
 
 ---
